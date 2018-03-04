@@ -1,0 +1,49 @@
+#I have used David Robinson's blog http://varianceexplained.org/r/hn-trends/ to help me work out how to get the titles
+#from Conservation Letters (http://onlinelibrary.wiley.com/journal/10.1111/(ISSN)1755-263X) and to analyse them
+rm(list=ls())
+#instail.packages(c("tidyverse","scales","tidytext","stringr"))
+library(tidyverse)
+library(scales)
+library(tidytext)
+library(stringr)
+dat<-read_csv("scopus.csv") #data available at https://osf.io/69myd/
+titles<-dat [,c(2,3)] %>%
+  unnest_tokens(word,Title)
+data(stop_words)# has a list of stop words (e.g. and, the, etc.)
+word_counts <- titles %>%
+  count(word, sort = TRUE) %>%
+  anti_join(stop_words)# strips out the stop words
+
+word_counts
+word_counts %>%
+  head(25) %>%
+  mutate(word = reorder(word, n)) %>%
+  ggplot(aes(word, n)) +
+  geom_col(fill = "red") +
+  scale_y_continuous(labels = comma_format()) +
+  coord_flip() +
+  labs(title = "Most common words in Conservation Letters titles",
+       y = "# of uses")
+
+words_per_year <- titles %>%
+  anti_join(stop_words)%>%
+  group_by(word)%>%
+  add_count(Year, word)
+
+
+words_yr<-words_per_year %>%
+  arrange(word)%>%
+  distinct(word, Year, .keep_all = TRUE)%>%
+  filter(n() >= 5)%>%
+  group_by(word)%>%
+  arrange(-n)
+  
+
+words_yr%>%
+  filter(any(c("biodiversity", "species","protected","marine","management","social") %in% word))%>%
+  ggplot(aes(as.numeric(Year), n, group=1)) +
+  geom_line(aes(color = word), show.legend = FALSE) +
+  xlim(c(2007,2018))+
+  labs(x="Year", y="number of papers")+
+  facet_wrap(~ word)+
+  theme_bw()
