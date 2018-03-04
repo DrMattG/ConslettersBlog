@@ -1,0 +1,92 @@
+---
+title: "Trends in Conservation Letters article titles"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Learning tidyverse
+
+I recently heard David Robinson on the Data camp podcast "dataframed" (https://www.datacamp.com/community/podcast). His excellent blog (http://varianceexplained.org) has some really interesting data science applications in R, many of which are focused on analysis of text. I used this one http://varianceexplained.org/r/hn-trends/ as a model to analyse the trends in the words used in titles of articles in the Journal Conservation Letters. My main aim was to start to learn how to use Hadley Whickham's tidyverse package in R (https://www.tidyverse.org/) which is designed to make data science more accessable and straight-forward. 
+
+I searched on www.scopus.com for articles in the Journal Conservation Letters. Scopus only allows you to download 2000 articles. The data file (a csv) is available here: https://osf.io/69myd/. 
+
+The first step is to load the data and load the required packages: 
+
+```{r, echo=TRUE, message=FALSE, warning=FALSE}
+library(tidyverse)
+library(scales)
+library(tidytext)
+library(stringr)
+```
+
+Then we upload the data:
+
+```{r, echo=TRUE, message=FALSE, warning=FALSE}
+dat<-read_csv("scopus.csv")
+```
+
+To get the title text we need to select the the second column and to get the publication year we select the third:
+```{r,echo=TRUE, message=FALSE, warning=FALSE}
+titles<-dat [,c(2,3)] %>%
+  unnest_tokens(word,Title)
+```
+The "%>%" symbol is known as a pipe. This tells R to take the value from the left and pass it to the right as an argument. It has many advantages over the traditional way of coding in R. It is much more intuitive, reads like English (from left to right) and gives you much better organisation of your code. So in the above code we ask R to get the two columns of data (title and year) and then the Unnest_tokens function splits the individual words in each title in to a row with publication year.
+
+The next step is remove all the small "stopwords" such as "the", "and", "a", etc. The function anti_join removes the stopwords from our word_counts dataframe. 
+```{r,echo=TRUE, message=FALSE, warning=FALSE}
+data(stop_words)
+word_counts <- titles %>%
+  count(word, sort = TRUE) %>%
+  anti_join(stop_words)
+```
+Let's look at the word_counts dataframe.
+```{r,echo=TRUE, message=FALSE, warning=FALSE}
+word_counts
+```
+The tidyverse package allows you to directly plot a ggplot2 graph from a summarised dataframe. Here we use mutate to add a coloumn to count the number of times the word is recorded in the Conservation Letters titles.
+```{r,echo=TRUE, message=FALSE, warning=FALSE}
+word_counts %>%
+  head(25) %>%
+  mutate(word = reorder(word, n)) %>%
+  ggplot(aes(word, n)) +
+  geom_col(fill = "red") +
+  scale_y_continuous(labels = comma_format()) +
+  coord_flip() +
+  labs(title = "Most common words in Conservation Letters titles",
+       y = "# of uses")
+
+```
+Next we want to see how the word counts have changed over time.
+```{r,echo=TRUE, message=FALSE, warning=FALSE}
+words_per_year <- titles %>%
+  anti_join(stop_words)%>%
+  group_by(word)%>%
+  add_count(Year, word)
+```
+Then we take each distinct word per year and count those with more than 5 rows. The function arrange allows you to sort the dataframe by the number of times a word has been used in the article title. Using the "-" sorts from largest to smallest.
+```{r,echo=TRUE, message=FALSE, warning=FALSE}
+words_yr<-words_per_year %>%
+  arrange(word)%>%
+  distinct(word, Year, .keep_all = TRUE)%>%
+  filter(n() >= 5)%>%
+  group_by(word)%>%
+  arrange(-n)
+```
+Let's look at some of the most common words used and see how these have changed over time. 
+
+```{r,echo=TRUE, message=FALSE, warning=FALSE}
+words_yr%>%
+  filter(any(c("biodiversity", "species","protected","marine","management","social") %in% word))%>%
+  ggplot(aes(as.numeric(Year), n, group=1)) +
+  geom_line(aes(color = word), show.legend = FALSE) +
+  xlim(c(2007,2018))+
+  labs(x="Year", y="number of papers")+
+  facet_wrap(~ word)+
+  theme_bw()
+
+```
+
+There are two trends (in this admittedly small sample of titles) that stand out to me. First is the recent increase in the term "social" which (I hope!) represents an increase recognition that conservation is about people as much as it is about wildlife. I was suprised to see the increase in the term "species" in recent years. Species remain the currency of Conservation but perhaps there needs to be increased focus on ecosystem conservation.
